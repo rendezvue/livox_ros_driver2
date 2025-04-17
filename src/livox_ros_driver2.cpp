@@ -33,8 +33,111 @@
 #include "driver_node.h"
 #include "lddc.h"
 #include "lds_lidar.h"
+#include <diagnostic_msgs/DiagnosticStatus.h>
+#include <diagnostic_msgs/KeyValue.h>
 
 using namespace livox_ros;
+uint32_t front_lidar_handle = 71739584; // Front LiDAR handle
+
+ros::Publisher diagnostic_pub;
+std::set<uint32_t> window_issue_codes = {
+  0x01040002, // Window dirty
+  0x01040003, // Window blocked (assumed)
+  0x01040004  // Window scratched (assumed)
+};
+// Parse HMS codes (copied from your original code)
+bool parse_hms_codes(const std::string& info, std::vector<uint32_t>& hms_codes) {
+    hms_codes.clear();
+    if (info.empty()) {
+        // DRIVER_WARN("parse_hms_codes: Input string is empty");
+        return false;
+    }
+    std::string search_key = "\"hms_code\": [";
+    size_t start_pos = info.find(search_key);
+    if (start_pos == std::string::npos) {
+        // DRIVER_WARN("parse_hms_codes: 'hms_code' key not found in info: %s", info.c_str());
+        return false;
+    }
+    start_pos += search_key.length();
+    size_t end_pos = info.find(']', start_pos);
+    if (end_pos == std::string::npos) {
+        // DRIVER_WARN("parse_hms_codes: Closing bracket not found in info: %s", info.c_str());
+        return false;
+    }
+    std::string array_str = info.substr(start_pos, end_pos - start_pos);
+    std::stringstream ss(array_str);
+    std::string token;
+    while (std::getline(ss, token, ',')) {
+        token.erase(std::remove_if(token.begin(), token.end(), ::isspace), token.end());
+        if (!token.empty()) {
+            try {
+                uint32_t value = std::stoul(token);
+                hms_codes.push_back(value);
+            } catch (const std::exception& e) {
+                // DRIVER_WARN("parse_hms_codes: Failed to parse HMS code value '%s': %s", token.c_str(), e.what());
+            }
+        }
+    }
+    if (hms_codes.empty()) {
+        // DRIVER_WARN("parse_hms_codes: No valid HMS codes parsed from array: %s", array_str.c_str());
+        return false;
+    }
+    return true;
+}
+
+// Status info callback for HMS codes
+void StatusInfoCallback(uint32_t handle, uint8_t dev_type, const char* info, void* client_data) {
+    // DRIVER_DEBUG("StatusInfoCallback called for handle %u, dev_type %u", handle, dev_type);
+
+    if (info == nullptr) {
+        // DRIVER_ERROR("StatusInfoCallback: info is nullptr for handle %u", handle);
+        diagnostic_msgs::DiagnosticStatus diag_status;
+        diag_status.name = (handle == front_lidar_handle) ? "Front Livox LiDAR" : "Rear Livox LiDAR";
+        diag_status.level = diagnostic_msgs::DiagnosticStatus::ERROR;
+        diag_status.message = "Received null info string.";
+        diagnostic_msgs::KeyValue kv;
+        kv.key = "HMS Codes";
+        kv.value = "None";
+        diag_status.values.push_back(kv);
+        diagnostic_pub.publish(diag_status);
+        return;
+    }
+
+    std::vector<uint32_t> hms_codes;
+    bool hms_code_found = parse_hms_codes(std::string(info), hms_codes);
+    bool has_window_issue = false;
+    std::string hms_str;
+    std::vector<uint32_t> detected_issues;
+
+    if (hms_code_found) {
+        for (size_t i = 0; i < hms_codes.size(); ++i) {
+            uint32_t code = hms_codes[i];
+            char hex_str[12];
+            snprintf(hex_str, sizeof(hex_str), "0x%08X", code);
+            if (window_issue_codes.count(code) > 0) {
+                has_window_issue = true;
+                detected_issues.push_back(code);
+            }
+            hms_str += hex_str + std::string(" ");
+        }
+        // DRIVER_DEBUG("HMS codes string for handle %u: %s", handle, hms_str.c_str());
+    }
+
+    diagnostic_msgs::DiagnosticStatus diag_status;
+    diag_status.name = (handle == front_lidar_handle) ? "Front Livox LiDAR" : "Rear Livox LiDAR";
+    if (has_window_issue) {
+        diag_status.level = diagnostic_msgs::DiagnosticStatus::WARN;
+        diag_status.message = "Window is dirty.";
+    } else {
+        diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
+        diag_status.message = hms_code_found ? "Window is clean." : "No HMS codes received.";
+    }
+    diagnostic_msgs::KeyValue kv;
+    kv.key = "HMS Codes";
+    kv.value = hms_str.empty() ? "None" : hms_str;
+    diag_status.values.push_back(kv);
+    diagnostic_pub.publish(diag_status);
+}
 
 #ifdef BUILDING_ROS1
 int main(int argc, char **argv) {
@@ -49,6 +152,7 @@ int main(int argc, char **argv) {
   livox_ros::DriverNode livox_node;
 
   DRIVER_INFO(livox_node, "Livox Ros Driver2 Version: %s", LIVOX_ROS_DRIVER2_VERSION_STRING);
+  diagnostic_pub = livox_node.GetNode().advertise<diagnostic_msgs::DiagnosticStatus>("/diagnostics", 1);
 
   /** Init default system parameter */
   int xfer_format = kPointCloud2Msg;
@@ -98,6 +202,7 @@ int main(int argc, char **argv) {
 
     if ((read_lidar->InitLdsLidar(user_config_path))) {
       DRIVER_INFO(livox_node, "Init lds lidar successfully!");
+      SetLivoxLidarInfoCallback(StatusInfoCallback, nullptr);
     } else {
       DRIVER_ERROR(livox_node, "Init lds lidar failed!");
     }
