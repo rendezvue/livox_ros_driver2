@@ -554,7 +554,16 @@ void Lddc::InitImuMsg(const ImuData& imu_data, ImuMsg& imu_msg, uint64_t& timest
 
     imu_msg.angular_velocity.x = imu_data.gyro_x;
     imu_msg.angular_velocity.y = imu_data.gyro_y;
-    imu_msg.angular_velocity.z = imu_data.gyro_z * -1.0f;
+
+    if (std::abs(imu_data.gyro_z) < 0.015f)
+    {
+        imu_msg.angular_velocity.z = 0.0f;
+    }
+    else
+    {
+        imu_msg.angular_velocity.z = imu_data.gyro_z * -1.0f;
+    }
+
     imu_msg.linear_acceleration.x = imu_data.acc_x;
     imu_msg.linear_acceleration.y = imu_data.acc_y;
     imu_msg.linear_acceleration.z = imu_data.acc_z;
