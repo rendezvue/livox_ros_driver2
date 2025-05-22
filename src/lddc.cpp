@@ -37,6 +37,13 @@
 #include "driver_node.h"
 #include "lds_lidar.h"
 
+#include <deque>
+std::deque<float> gyro_z_buf_;
+std::deque<float> acc_x_buf_;
+std::deque<float> acc_y_buf_;
+std::deque<float> acc_z_buf_;
+const int kFilterWindow = 20; // Filter window size
+
 namespace livox_ros
 {
 
@@ -543,7 +550,7 @@ void Lddc::PublishPclData(const uint8_t index, const uint64_t timestamp, const P
 
 void Lddc::InitImuMsg(const ImuData& imu_data, ImuMsg& imu_msg, uint64_t& timestamp)
 {
-    imu_msg.header.frame_id = frame_id_;
+    imu_msg.header.frame_id = "imu_link";
 
     timestamp = imu_data.time_stamp;
 #ifdef BUILDING_ROS1
@@ -552,21 +559,45 @@ void Lddc::InitImuMsg(const ImuData& imu_data, ImuMsg& imu_msg, uint64_t& timest
     imu_msg.header.stamp = rclcpp::Time(timestamp); // to ros time stamp
 #endif
 
+    // --- 노이즈 필터: 이동평균 + 저역 통과 필터 적용 ---
+    // gyro_z
+    float gz = imu_data.gyro_z * -1.0f;
+    gyro_z_buf_.push_back(gz);
+    if (gyro_z_buf_.size() > kFilterWindow) gyro_z_buf_.pop_front();
+    float gz_ma = std::accumulate(gyro_z_buf_.begin(), gyro_z_buf_.end(), 0.0f) / gyro_z_buf_.size();
+
+    // 저역 통과 필터
+    static float gz_lpf = 0.0f;
+    const float alpha = 0.15f; // 0~1, 작을수록 더 부드러움
+    gz_lpf = alpha * gz_ma + (1.0f - alpha) * gz_lpf;
+    float gz_f = gz_lpf;
+
+    // acc_x
+    acc_x_buf_.push_back(imu_data.acc_x);
+    if (acc_x_buf_.size() > kFilterWindow) acc_x_buf_.pop_front();
+    float ax_f = std::accumulate(acc_x_buf_.begin(), acc_x_buf_.end(), 0.0f) / acc_x_buf_.size();
+
+    // acc_y
+    acc_y_buf_.push_back(imu_data.acc_y);
+    if (acc_y_buf_.size() > kFilterWindow) acc_y_buf_.pop_front();
+    float ay_f = std::accumulate(acc_y_buf_.begin(), acc_y_buf_.end(), 0.0f) / acc_y_buf_.size();
+
+    // acc_z
+    acc_z_buf_.push_back(imu_data.acc_z);
+    if (acc_z_buf_.size() > kFilterWindow) acc_z_buf_.pop_front();
+    float az_f = std::accumulate(acc_z_buf_.begin(), acc_z_buf_.end(), 0.0f) / acc_z_buf_.size();
+
+    // 적용
     imu_msg.angular_velocity.x = imu_data.gyro_x;
     imu_msg.angular_velocity.y = imu_data.gyro_y;
+    imu_msg.angular_velocity.z = (std::abs(gz_f) < 0.015f) ? 0.0f : gz_f;
+    imu_msg.linear_acceleration.x = ax_f;
+    imu_msg.linear_acceleration.y = ay_f;
+    imu_msg.linear_acceleration.z = az_f;
 
-    if (std::abs(imu_data.gyro_z) < 0.015f)
-    {
-        imu_msg.angular_velocity.z = 0.0f;
-    }
-    else
-    {
-        imu_msg.angular_velocity.z = imu_data.gyro_z * -1.0f;
-    }
-
-    imu_msg.linear_acceleration.x = imu_data.acc_x;
-    imu_msg.linear_acceleration.y = imu_data.acc_y;
-    imu_msg.linear_acceleration.z = imu_data.acc_z;
+    imu_msg.orientation_covariance = {-1, 0, 0, 0, -1, 0, 0, 0, -1};
+    imu_msg.linear_acceleration_covariance = {0.05, 0, 0, 0, 0.05, 0, 0, 0, 0.05};
+    imu_msg.angular_velocity_covariance = {0.05, 0, 0, 0, 0.05, 0, 0, 0, 0.05};
 }
 
 void Lddc::PublishImuData(LidarImuDataQueue& imu_data_queue, const uint8_t index)
