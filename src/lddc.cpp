@@ -596,8 +596,8 @@ void Lddc::InitImuMsg(const ImuData& imu_data, ImuMsg& imu_msg, uint64_t& timest
     imu_msg.linear_acceleration.z = az_f;
 
     imu_msg.orientation_covariance = {-1, 0, 0, 0, -1, 0, 0, 0, -1};
-    imu_msg.linear_acceleration_covariance = {0.05, 0, 0, 0, 0.05, 0, 0, 0, 0.05};
-    imu_msg.angular_velocity_covariance = {0.05, 0, 0, 0, 0.05, 0, 0, 0, 0.05};
+    imu_msg.linear_acceleration_covariance = {0.009103, 0, 0, 0, 0.005663, 0, 0, 0, 0.004951};
+    imu_msg.angular_velocity_covariance = {0.006209, 0, 0, 0, 0.005714, 0, 0, 0, 0.088040};
 }
 
 void Lddc::PublishImuData(LidarImuDataQueue& imu_data_queue, const uint8_t index)
