@@ -36,6 +36,8 @@ find_package(catkin REQUIRED COMPONENTS
     rosbag
     pcl_ros
     diagnostic_msgs
+    nodelet
+    pluginlib
 )
 
 ## Find pcl lib
@@ -73,6 +75,8 @@ catkin_package(CATKIN_DEPENDS
     roscpp rospy std_msgs message_runtime
     pcl_ros
     diagnostic_msgs
+    nodelet pluginlib
+    LIBRARIES livox_ros_driver2_nodelet
 )
 
 #---------------------------------------------------------------------------------------
@@ -125,17 +129,17 @@ target_sources(${PROJECT_NAME}_node
     src/lds_lidar.cpp
     src/lddc.cpp
     src/livox_ros_driver2.cpp
-    
+
     src/comm/comm.cpp
     src/comm/ldq.cpp
     src/comm/semaphore.cpp
     src/comm/lidar_imu_data_queue.cpp
     src/comm/cache_index.cpp
     src/comm/pub_handler.cpp
-    
+
     src/parse_cfg_file/parse_cfg_file.cpp
     src/parse_cfg_file/parse_livox_lidar_cfg.cpp
-    
+
     src/call_back/lidar_common_callback.cpp
     src/call_back/livox_lidar_callback.cpp
 )
@@ -176,6 +180,28 @@ install(TARGETS ${PROJECT_NAME}_node
 
 install(DIRECTORY launch_ROS1/
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch_ROS1
+)
+
+
+add_library(livox_relay_nodelet src/livox_relay_nodelet.cpp)
+
+target_include_directories(livox_relay_nodelet
+    PUBLIC
+    ${catkin_INCLUDE_DIRS}
+    ${PCL_INCLUDE_DIRS}
+    ${APR_INCLUDE_DIRS}
+    3rdparty
+    src
+)
+target_link_libraries(livox_relay_nodelet
+${catkin_LIBRARIES} ${PCL_LIBRARIES} ${LIVOX_LIDAR_SDK_LIBRARY} ${Boost_LIBRARY})
+add_dependencies(livox_relay_nodelet ${catkin_EXPORTED_TARGETS})
+
+install(TARGETS livox_relay_nodelet
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+)
+install(FILES plugin.xml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 
 #---------------------------------------------------------------------------------------
