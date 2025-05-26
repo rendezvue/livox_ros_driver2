@@ -1,0 +1,7 @@
+<library path="lib/liblivox_relay_nodelet">
+  <class name="livox_ros_driver2/LivoxRelayNodelet"
+         type="livox_ros::LivoxRelayNodelet"
+         base_class_type="nodelet::Nodelet">
+    <description>Livox Relay Nodelet</description>
+  </class>
+</library>

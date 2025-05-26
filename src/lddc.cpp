@@ -558,6 +558,7 @@ void Lddc::InitImuMsg(const ImuData& imu_data, ImuMsg& imu_msg, uint64_t& timest
 #elif defined BUILDING_ROS2
     imu_msg.header.stamp = rclcpp::Time(timestamp); // to ros time stamp
 #endif
+    const float alpha = 0.15f; // 0~1, 작을수록 더 부드러움
 
     // --- 노이즈 필터: 이동평균 + 저역 통과 필터 적용 ---
     // gyro_z
@@ -568,24 +569,35 @@ void Lddc::InitImuMsg(const ImuData& imu_data, ImuMsg& imu_msg, uint64_t& timest
 
     // 저역 통과 필터
     static float gz_lpf = 0.0f;
-    const float alpha = 0.15f; // 0~1, 작을수록 더 부드러움
     gz_lpf = alpha * gz_ma + (1.0f - alpha) * gz_lpf;
     float gz_f = gz_lpf;
 
     // acc_x
     acc_x_buf_.push_back(imu_data.acc_x);
     if (acc_x_buf_.size() > kFilterWindow) acc_x_buf_.pop_front();
-    float ax_f = std::accumulate(acc_x_buf_.begin(), acc_x_buf_.end(), 0.0f) / acc_x_buf_.size();
+    float ax_ma = std::accumulate(acc_x_buf_.begin(), acc_x_buf_.end(), 0.0f) / acc_x_buf_.size();
+
+    static float ax_lpf = 0.0f;
+    ax_lpf = alpha * ax_ma + (1.0f - alpha) * ax_lpf;
+    float ax_f = ax_lpf;
 
     // acc_y
     acc_y_buf_.push_back(imu_data.acc_y);
     if (acc_y_buf_.size() > kFilterWindow) acc_y_buf_.pop_front();
-    float ay_f = std::accumulate(acc_y_buf_.begin(), acc_y_buf_.end(), 0.0f) / acc_y_buf_.size();
+    float ay_ma = std::accumulate(acc_y_buf_.begin(), acc_y_buf_.end(), 0.0f) / acc_y_buf_.size();
+
+    static float ay_lpf = 0.0f;
+    ay_lpf = alpha * ay_ma + (1.0f - alpha) * ay_lpf;
+    float ay_f = ay_lpf;
 
     // acc_z
     acc_z_buf_.push_back(imu_data.acc_z);
     if (acc_z_buf_.size() > kFilterWindow) acc_z_buf_.pop_front();
-    float az_f = std::accumulate(acc_z_buf_.begin(), acc_z_buf_.end(), 0.0f) / acc_z_buf_.size();
+    float az_ma = std::accumulate(acc_z_buf_.begin(), acc_z_buf_.end(), 0.0f) / acc_z_buf_.size();
+
+    static float az_lpf = 0.0f;
+    az_lpf = alpha * az_ma + (1.0f - alpha) * az_lpf;
+    float az_f = az_lpf;
 
     // 적용
     imu_msg.angular_velocity.x = imu_data.gyro_x;
