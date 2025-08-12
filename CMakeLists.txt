@@ -35,9 +35,6 @@ find_package(catkin REQUIRED COMPONENTS
     message_generation
     rosbag
     pcl_ros
-    diagnostic_msgs
-    nodelet
-    pluginlib
 )
 
 ## Find pcl lib
@@ -47,7 +44,7 @@ find_package(PCL REQUIRED)
 add_message_files(FILES
     CustomPoint.msg
     CustomMsg.msg
-    #   Message2.msg
+#   Message2.msg
 )
 
 ## Generate added messages and services with any dependencies listed here
@@ -58,8 +55,8 @@ generate_messages(DEPENDENCIES
 find_package(PkgConfig)
 pkg_check_modules(APR apr-1)
 if (APR_FOUND)
-  message(${APR_INCLUDE_DIRS})
-  message(${APR_LIBRARIES})
+    message(${APR_INCLUDE_DIRS})
+    message(${APR_LIBRARIES})
 endif (APR_FOUND)
 
 ###################################
@@ -74,16 +71,13 @@ endif (APR_FOUND)
 catkin_package(CATKIN_DEPENDS
     roscpp rospy std_msgs message_runtime
     pcl_ros
-    diagnostic_msgs
-    nodelet pluginlib
-    LIBRARIES livox_ros_driver2_nodelet
 )
 
 #---------------------------------------------------------------------------------------
 # Set default build to release
 #---------------------------------------------------------------------------------------
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose Release or Debug" FORCE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose Release or Debug" FORCE)
 endif()
 
 #---------------------------------------------------------------------------------------
@@ -180,28 +174,6 @@ install(TARGETS ${PROJECT_NAME}_node
 
 install(DIRECTORY launch_ROS1/
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch_ROS1
-)
-
-
-add_library(livox_relay_nodelet src/livox_relay_nodelet.cpp)
-
-target_include_directories(livox_relay_nodelet
-    PUBLIC
-    ${catkin_INCLUDE_DIRS}
-    ${PCL_INCLUDE_DIRS}
-    ${APR_INCLUDE_DIRS}
-    3rdparty
-    src
-)
-target_link_libraries(livox_relay_nodelet
-${catkin_LIBRARIES} ${PCL_LIBRARIES} ${LIVOX_LIDAR_SDK_LIBRARY} ${Boost_LIBRARY})
-add_dependencies(livox_relay_nodelet ${catkin_EXPORTED_TARGETS})
-
-install(TARGETS livox_relay_nodelet
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-)
-install(FILES plugin.xml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 
 #---------------------------------------------------------------------------------------
