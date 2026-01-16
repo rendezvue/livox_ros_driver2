@@ -26,7 +26,7 @@
 #define LIVOX_DRIVER_NODE_H
 
 #include "include/ros_headers.h"
-
+#include <std_srvs/srv/trigger.hpp>
 namespace livox_ros {
 
 class Lddc;
@@ -64,6 +64,15 @@ class DriverNode final : public rclcpp::Node {
  private:
   void PointCloudDataPollThread();
   void ImuDataPollThread();
+
+  // 재부팅, 펌웨어 서비스 추가
+
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reboot_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr firmware_service_;
+  void RebootCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                      std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+  void GetFirmwareCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                           std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
   std::unique_ptr<Lddc> lddc_ptr_;
   std::shared_ptr<std::thread> pointclouddata_poll_thread_;

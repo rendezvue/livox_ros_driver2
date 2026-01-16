@@ -37,6 +37,7 @@ find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 find_package(PCL REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
@@ -53,7 +54,7 @@ set(LIVOX_INTERFACES livox_interfaces2)
 rosidl_generate_interfaces(${LIVOX_INTERFACES}
     "msg/CustomPoint.msg"
     "msg/CustomMsg.msg"
-    DEPENDENCIES builtin_interfaces std_msgs
+    DEPENDENCIES builtin_interfaces std_msgs std_srvs
     LIBRARY_NAME ${PROJECT_NAME}
 )
 
@@ -76,17 +77,17 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
     src/driver_node.cpp
     src/lds.cpp
     src/lds_lidar.cpp
-    
+
     src/comm/comm.cpp
     src/comm/ldq.cpp
     src/comm/semaphore.cpp
     src/comm/lidar_imu_data_queue.cpp
     src/comm/cache_index.cpp
     src/comm/pub_handler.cpp
-    
+
     src/parse_cfg_file/parse_cfg_file.cpp
     src/parse_cfg_file/parse_livox_lidar_cfg.cpp
-    
+
     src/call_back/lidar_common_callback.cpp
     src/call_back/livox_lidar_callback.cpp
 )
