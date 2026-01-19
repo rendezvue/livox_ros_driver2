@@ -220,8 +220,8 @@ void DriverNode::RebootCallback(const std::shared_ptr<std_srvs::srv::Trigger::Re
   for (uint32_t i = 0; i < lds_lidar->lidar_count_; ++i) {
     LidarDevice* lidar = &lds_lidar->lidars_[i];
 
-    // kConnectStateSampling 상태인 라이다만 재부팅
-    if (lidar->connect_state == kConnectStateSampling) {
+    // 라이다 재부팅 요청
+    if (lidar->handle != 0) {
       DRIVER_INFO(*this, "Found connected LiDAR at index %u, handle: %u, state: %u",
                   i, lidar->handle, lidar->connect_state);
 
