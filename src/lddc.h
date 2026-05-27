@@ -44,6 +44,7 @@ typedef enum {
   kLivoxCustomMsg = 1,
   kPclPxyziMsg = 2,
   kLivoxImuMsg = 3,
+  kLivoxLidarStatusMsg = 4,
 } TransferType;
 
 /** Type-Definitions based on ROS versions */
@@ -55,6 +56,7 @@ using PointField = sensor_msgs::PointField;
 using CustomMsg = livox_ros_driver2::CustomMsg;
 using CustomPoint = livox_ros_driver2::CustomPoint;
 using ImuMsg = sensor_msgs::Imu;
+using StatusMsg = std_msgs::Bool;
 #elif defined BUILDING_ROS2
 template <typename MessageT> using Publisher = rclcpp::Publisher<MessageT>;
 using PublisherPtr = std::shared_ptr<rclcpp::PublisherBase>;
@@ -63,6 +65,7 @@ using PointField = sensor_msgs::msg::PointField;
 using CustomMsg = livox_ros_driver2::msg::CustomMsg;
 using CustomPoint = livox_ros_driver2::msg::CustomPoint;
 using ImuMsg = sensor_msgs::msg::Imu;
+using StatusMsg = std_msgs::msg::Bool;
 #endif
 
 using PointCloud = pcl::PointCloud<pcl::PointXYZI>;
@@ -119,6 +122,7 @@ class Lddc final {
   void PublishPclData(const uint8_t index, const uint64_t timestamp, const PointCloud& cloud);
 
   void InitImuMsg(const ImuData& imu_data, ImuMsg& imu_msg, uint64_t& timestamp);
+  void PublishLidarStatus(const uint8_t index);
 
   void FillPointsToPclMsg(PointCloud& pcl_msg, LivoxPointXyzrtlt* src_point, uint32_t num);
   void FillPointsToCustomMsg(CustomMsg& livox_msg, LivoxPointXyzrtlt* src_point, uint32_t num,
@@ -130,6 +134,7 @@ class Lddc final {
 
   PublisherPtr GetCurrentPublisher(uint8_t index);
   PublisherPtr GetCurrentImuPublisher(uint8_t index);
+  PublisherPtr GetCurrentStatusPublisher(uint8_t index);
 
  private:
   uint8_t transfer_format_;
@@ -147,12 +152,16 @@ class Lddc final {
   PublisherPtr global_pub_;
   PublisherPtr private_imu_pub_[kMaxSourceLidar];
   PublisherPtr global_imu_pub_;
+  PublisherPtr private_status_pub_[kMaxSourceLidar];
+  PublisherPtr global_status_pub_;
   rosbag::Bag *bag_;
 #elif defined BUILDING_ROS2
   PublisherPtr private_pub_[kMaxSourceLidar];
   PublisherPtr global_pub_;
   PublisherPtr private_imu_pub_[kMaxSourceLidar];
   PublisherPtr global_imu_pub_;
+  PublisherPtr private_status_pub_[kMaxSourceLidar];
+  PublisherPtr global_status_pub_;
 #endif
 
   livox_ros::DriverNode *cur_node_;

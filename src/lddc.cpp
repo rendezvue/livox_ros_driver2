@@ -55,8 +55,10 @@ Lddc::Lddc(int format, int multi_topic, int data_src, int output_type,
   lds_ = nullptr;
   memset(private_pub_, 0, sizeof(private_pub_));
   memset(private_imu_pub_, 0, sizeof(private_imu_pub_));
+  memset(private_status_pub_, 0, sizeof(private_status_pub_));
   global_pub_ = nullptr;
   global_imu_pub_ = nullptr;
+  global_status_pub_ = nullptr;
   cur_node_ = nullptr;
   bag_ = nullptr;
 }
@@ -86,6 +88,10 @@ Lddc::~Lddc() {
   if (global_imu_pub_) {
     delete global_imu_pub_;
   }
+
+  if (global_status_pub_) {
+    delete global_status_pub_;
+  }
 #endif
 
   PrepareExit();
@@ -100,6 +106,12 @@ Lddc::~Lddc() {
   for (uint32_t i = 0; i < kMaxSourceLidar; i++) {
     if (private_imu_pub_[i]) {
       delete private_imu_pub_[i];
+    }
+  }
+
+  for (uint32_t i = 0; i < kMaxSourceLidar; i++) {
+    if (private_status_pub_[i]) {
+      delete private_status_pub_[i];
     }
   }
 #endif
@@ -342,6 +354,7 @@ void Lddc::PublishPointcloud2Data(const uint8_t index, const uint64_t timestamp,
 
   if (kOutputToRos == output_type_) {
     publisher_ptr->publish(cloud);
+    PublishLidarStatus(index);
   } else {
 #ifdef BUILDING_ROS1
     if (bag_ && enable_lidar_bag_) {
@@ -407,6 +420,7 @@ void Lddc::PublishCustomPointData(const CustomMsg& livox_msg, const uint8_t inde
 
   if (kOutputToRos == output_type_) {
     publisher_ptr->publish(livox_msg);
+    PublishLidarStatus(index);
   } else {
 #ifdef BUILDING_ROS1
     if (bag_ && enable_lidar_bag_) {
@@ -464,6 +478,7 @@ void Lddc::PublishPclData(const uint8_t index, const uint64_t timestamp, const P
   PublisherPtr publisher_ptr = Lddc::GetCurrentPublisher(index);
   if (kOutputToRos == output_type_) {
     publisher_ptr->publish(cloud);
+    PublishLidarStatus(index);
   } else {
     if (bag_ && enable_lidar_bag_) {
       bag_->write(publisher_ptr->getTopic(), ros::Time(timestamp / 1000000000.0), cloud);
@@ -523,6 +538,22 @@ void Lddc::PublishImuData(LidarImuDataQueue& imu_data_queue, const uint8_t index
   }
 }
 
+void Lddc::PublishLidarStatus(const uint8_t index) {
+  StatusMsg status_msg;
+  status_msg.data = true;
+
+#ifdef BUILDING_ROS1
+  PublisherPtr publisher_ptr = GetCurrentStatusPublisher(index);
+#elif defined BUILDING_ROS2
+  Publisher<StatusMsg>::SharedPtr publisher_ptr =
+      std::dynamic_pointer_cast<Publisher<StatusMsg>>(GetCurrentStatusPublisher(index));
+#endif
+
+  if (publisher_ptr) {
+    publisher_ptr->publish(status_msg);
+  }
+}
+
 #ifdef BUILDING_ROS2
 std::shared_ptr<rclcpp::PublisherBase> Lddc::CreatePublisher(uint8_t msg_type,
     std::string &topic_name, uint32_t queue_size) {
@@ -547,6 +578,10 @@ std::shared_ptr<rclcpp::PublisherBase> Lddc::CreatePublisher(uint8_t msg_type,
           "%s publish use imu format", topic_name.c_str());
       return cur_node_->create_publisher<ImuMsg>(topic_name,
           queue_size);
+    } else if (kLivoxLidarStatusMsg == msg_type)  {
+      DRIVER_INFO(*cur_node_,
+          "%s publish use lidar status format", topic_name.c_str());
+      return cur_node_->create_publisher<StatusMsg>(topic_name, queue_size);
     } else {
       PublisherPtr null_publisher(nullptr);
       return null_publisher;
@@ -638,6 +673,36 @@ PublisherPtr Lddc::GetCurrentImuPublisher(uint8_t handle) {
 
   return *pub;
 }
+
+PublisherPtr Lddc::GetCurrentStatusPublisher(uint8_t handle) {
+  ros::Publisher **pub = nullptr;
+  uint32_t queue_size = 1;
+
+  if (use_multi_topic_) {
+    pub = &private_status_pub_[handle];
+  } else {
+    pub = &global_status_pub_;
+  }
+
+  if (*pub == nullptr) {
+    char name_str[64];
+    memset(name_str, 0, sizeof(name_str));
+    if (use_multi_topic_) {
+      DRIVER_INFO(*cur_node_, "Support multi topics.");
+      std::string ip_string = IpNumToString(lds_->lidars_[handle].handle);
+      snprintf(name_str, sizeof(name_str), "livox/lidar_status_%s",
+               ReplacePeriodByUnderline(ip_string).c_str());
+    } else {
+      DRIVER_INFO(*cur_node_, "Support only one topic.");
+      snprintf(name_str, sizeof(name_str), "livox/lidar_status");
+    }
+
+    *pub = new ros::Publisher;
+    **pub = cur_node_->GetNode().advertise<StatusMsg>(name_str, queue_size);
+  }
+
+  return *pub;
+}
 #elif defined BUILDING_ROS2
 std::shared_ptr<rclcpp::PublisherBase> Lddc::GetCurrentPublisher(uint8_t handle) {
   uint32_t queue_size = kMinEthPacketQueueSize;
@@ -686,6 +751,28 @@ std::shared_ptr<rclcpp::PublisherBase> Lddc::GetCurrentImuPublisher(uint8_t hand
       global_imu_pub_ = CreatePublisher(kLivoxImuMsg, topic_name, queue_size);
     }
     return global_imu_pub_;
+  }
+}
+
+std::shared_ptr<rclcpp::PublisherBase> Lddc::GetCurrentStatusPublisher(uint8_t handle) {
+  const uint32_t queue_size = 1;
+  if (use_multi_topic_) {
+    if (!private_status_pub_[handle]) {
+      char name_str[64];
+      memset(name_str, 0, sizeof(name_str));
+      std::string ip_string = IpNumToString(lds_->lidars_[handle].handle);
+      snprintf(name_str, sizeof(name_str), "livox/lidar_status_%s",
+          ReplacePeriodByUnderline(ip_string).c_str());
+      std::string topic_name(name_str);
+      private_status_pub_[handle] = CreatePublisher(kLivoxLidarStatusMsg, topic_name, queue_size);
+    }
+    return private_status_pub_[handle];
+  } else {
+    if (!global_status_pub_) {
+      std::string topic_name("livox/lidar_status");
+      global_status_pub_ = CreatePublisher(kLivoxLidarStatusMsg, topic_name, queue_size);
+    }
+    return global_status_pub_;
   }
 }
 #endif
